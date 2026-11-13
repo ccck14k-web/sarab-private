@@ -1,0 +1,41 @@
+name: Build APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Unzip and build
+        run: |
+          ZIP=$(find . -maxdepth 1 -name '*.zip' | sort | tail -n1)
+          echo "Using $ZIP"
+          mkdir -p /tmp/proj
+          unzip -q "$ZIP" -d /tmp/proj
+          DIR=$(dirname "$(find /tmp/proj -name settings.gradle | head -n1)")
+          cd "$DIR"
+          APPID=$(grep -oP "applicationId '\K[^']+" app/build.gradle)
+          if [ -z "$APPID" ]; then APPID=Alsarab-Keyboard; fi
+          echo "APPID=$APPID" >> "$GITHUB_ENV"
+          gradle assembleDebug --no-daemon
+          mkdir -p "$GITHUB_WORKSPACE/out"
+          cp "$(find . -name '*.apk' -path '*debug*' | head -n1)" "$GITHUB_WORKSPACE/out/$APPID.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APPID }}
+          path: out/*.apk
